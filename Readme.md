@@ -43,7 +43,7 @@ ansible-playbook -i inventory/aws_ec2.yml site.yml
 ~~~~
 
 Launch URL 
-- http://<publicip1>
-- http://<publicip2>
+- http://publicipofantserver
+- http://publicipofcarserver
 
 Note: https URL may not work due to self-signed certificate
