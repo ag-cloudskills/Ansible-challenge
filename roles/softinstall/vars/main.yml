@@ -1,0 +1,6 @@
+---
+# vars file for conf-mgmt
+url1 : "https://raw.githubusercontent.com/Metroxe/one-html-page-challenge/bcaf97131c89a4856959885cdabd170a7ed64232/entries/ant_colony.html"
+url2 : "https://raw.githubusercontent.com/Metroxe/one-html-page-challenge/master/entries/mini_car_game.html"
+dest_path: "/var/www/html/index.html"
+

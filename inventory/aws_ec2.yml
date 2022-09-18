@@ -1,0 +1,19 @@
+plugin: amazon.aws.aws_ec2
+aws_profile: default
+regions:
+  - ap-southeast-2
+filters:
+  tag:purpose:  
+    - ansi-challenge
+
+hostnames:
+  - ip-address
+
+#keyed_groups:
+#  - prefix: name
+#    key: tags.Name
+
+groups:
+  all: "'ansi-challenge' in tags.purpose"
+  car: "'ansible-chall-car' in tags.Name"
+  ant: "'ansible-chall-ant' in tags.Name"

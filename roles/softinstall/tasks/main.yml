@@ -1,0 +1,136 @@
+---
+# tasks file for conf-mgmt
+- name: ping dynamic inventory
+  ping:
+  register: serv
+
+
+- name: update all packages
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+  tags:
+    - skip_ansible_lint  
+
+- name: install system packages
+  ansible.builtin.dnf:
+    name: '{{ item }}'
+    state: present
+  with_items:
+    - chrony
+    - firewalld
+    - yum-utils
+    - httpd
+    - mod_ssl  
+
+- name: check if reboot is required
+  ansible.builtin.command: needs-restarting -r
+  register: result
+  ignore_errors: yes
+  changed_when: false
+
+- name: display result
+  debug:
+    var: result.rc      
+   
+- name : reboot the host
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+  when: result.rc ==1
+
+- name: permit https traffic
+  ansible.posix.firewalld:
+    service: https
+    permanent: yes
+    state: enabled
+
+- name: permit traffic on port 80
+  ansible.posix.firewalld:
+    port: 80/tcp
+    permanent: yes
+    state: enabled
+
+- name: set localtimezone
+  ansible.builtin.command: "{{ item }}"
+  loop:
+    - timedatectl set-timezone "Australia/Sydney"
+    - timedatectl set-ntp yes
+  changed_when: false
+
+- name: ensure httpd is running
+  service:
+    name: httpd 
+    state: started
+
+- name: hardening of SSH
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    - regexp: "^PasswordAuthentication\ "
+      line: "PasswordAuthentication no"
+    - regexp: "^PermitEmptyPasswords\ "
+      line: "PermitEmptyPasswords no"
+    - regexp: "^ClientAliveInterval\ "
+      line: "ClientAliveInterval 300"    
+    - regexp: "^AllowTcpForwarding\ "
+      line: "AllowTcpForwarding no"
+    - regexp: "^Ciphers\ "
+      line: "Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr"    
+
+- name: reload ssh
+  ansible.builtin.service:
+    name: sshd
+    state: reloaded
+  
+- name: download one html page ant colony
+  ansible.builtin.get_url:
+    url: "{{ url1 }}"
+    dest: "{{ dest_path }}"
+  when: "'ant' in  group_names"
+
+- name: download one html page mini car
+  ansible.builtin.get_url:
+    url: "{{ url2 }}"
+    dest: "{{ dest_path }}"
+  when: "'car' in  group_names"  
+ 
+- name: generate key
+  openssl_privatekey:
+    path: /etc/pki/tls/private/httpd.key
+    size: 2048
+- name : generate csr
+  openssl_csr:
+    path: /etc/pki/tls/http.csr
+    privatekey_path: /etc/pki/tls/private/httpd.key
+- name : generate cert
+  openssl_certificate:
+    provider: selfsigned
+    path: /etc/pki/tls/certs/httpd.crt
+    privatekey_path: /etc/pki/tls/private/httpd.key
+    csr_path: /etc/pki/tls/http.csr
+
+- name : configure SSL cert
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf.d/ssl.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    - regexp: "^SSLCertificateFile\ "
+      line: "SSLCertificateFile /etc/pki/tls/certs/httpd.crt"
+    - regexp: "^SSLCertificateKeyFile\ "
+      line: "SSLCertificateKeyFile  /etc/pki/tls/private/httpd.key"
+      
+- name: Reload service http and firewallin all cases
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: reloaded
+  loop:
+    - httpd
+    - firewalld  
+
+      
+

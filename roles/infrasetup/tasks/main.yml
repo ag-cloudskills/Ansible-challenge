@@ -1,0 +1,117 @@
+---
+# Create VPC  
+- name: create aws vpc
+  amazon.aws.ec2_vpc_net:
+    aws_profile: default
+    state: present
+    name: "{{ aws_vpc_name }}"
+    cidr_block: "{{ aws_vpc_cidr_block }}"
+    region: "{{ aws_region }}"
+  register: vpc
+
+# Create public Subnet
+- name: create and associate public subnet
+  amazon.aws.ec2_vpc_subnet:
+   state: present
+   vpc_id: "{{ vpc.vpc.id }}"
+   region: "{{ aws_region }}"
+   cidr: "{{ web_subnet_cidr }}"
+   map_public: yes
+   resource_tags:
+    Name: "{{ web_subnet_name }}"
+  register: subnet
+
+# Create internet gateway
+- name: create igw
+  amazon.aws.ec2_vpc_igw:
+   vpc_id: "{{ vpc.vpc.id }}"
+   region: "{{ aws_region }}"
+   state: "present"
+   tags:
+    Name: "{{ aws_igw_name }}"
+  register: igw  
+
+# Adding route to igw
+
+- name: route traffic to internet
+  amazon.aws.ec2_vpc_route_table:
+    vpc_id: "{{ vpc.vpc.id }}"
+    region: "{{ aws_region }}"
+    subnets:
+      - "{{ subnet.subnet.id }}"
+    routes:
+      - dest: "{{ internet_cidr }}"
+        gateway_id: "{{ igw.gateway_id }}"
+    tags:
+      Name: internetroute
+
+
+
+# Create security group
+- name: create Security group
+  amazon.aws.ec2_group:
+    name: Web SG
+    description: Web Security Group
+    vpc_id: "{{ vpc.vpc.id }}"
+    region: "{{ aws_region }}"
+    rules:
+      - proto: tcp
+        ports:
+        - 80
+        - 443
+        - 22
+        cidr_ip: "{{ internet_cidr }}"
+        rule_desc: allow port for ssh and web traffic
+  register: web_sg
+
+# Create a directory
+
+- name: create directory for ssh key
+  ansible.builtin.file:
+    path: "{{ key_dest }}"
+    state: directory
+    mode: 0755
+
+# Create key for ssh authetication
+- name: create a new ec2 key pair
+  amazon.aws.ec2_key:
+    name: ssh_key
+  register: ec2_key_pair 
+
+# Create key for ssh authetication
+- name: save private key
+  ansible.builtin.copy: 
+    content: "{{ ec2_key_pair.key.private_key }}" 
+    dest: "{{ key }}" 
+    mode: 0600
+  when: ec2_key_pair.changed
+  tags:
+    - skip_ansible_lint
+
+# Create two EC2 instance
+
+- name: create ec2 instance
+  amazon.aws.ec2_instance:
+    key_name: "{{ ec2_key }}"
+    instance_type: "{{ ec2_instance_type }}"
+    image_id: "{{ ec2_ami }}"
+    tags:
+      Name: ansible-chall-{{ item }}
+      purpose: ansi-challenge
+    exact_count: 1
+    vpc_subnet_id: "{{ subnet.subnet.id }}"
+    security_group: "{{ web_sg.group_id }}"
+    network:
+      assign_public_ip: true
+    state: present
+  register: ec2
+  with_items:
+    - car
+    - ant
+
+- name: Pause for 5 minutes to build ec2 instances
+  ansible.builtin.pause:
+    minutes: 5
+
+
+
